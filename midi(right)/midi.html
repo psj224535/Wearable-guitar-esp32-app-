@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Wearable Guitar - 악보 팔로우 브릿지</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; padding: 32px; background: #1e1e1e; color: #fff; text-align: center; }
+        .btn { padding: 14px 26px; font-size: 17px; margin: 8px; cursor: pointer; border-radius: 8px; border: none; font-weight: bold; transition: 0.3s; }
+        #btnSerial { background: #00979D; color: white; }
+        #btnMidi { background: #C82439; color: white; }
+        .btn:hover { opacity: 0.85; }
+        .panel { max-width: 760px; margin: 16px auto; padding: 18px; background: #2a2a2a; border-radius: 12px; text-align: left; }
+        .panel h3 { margin: 0 0 12px; font-size: 15px; color: #9ad; letter-spacing: 0.05em; text-transform: uppercase; }
+        input[type=text] { background: #333; color: #fff; border: 1px solid #555; padding: 8px 10px; border-radius: 6px; font-family: monospace; font-size: 16px; }
+        label { font-size: 14px; color: #ccc; }
+        #currentChord { font-size: 22px; font-weight: 800; color: #39FF14; }
+        #scoreDisplay { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+        .step { min-width: 40px; padding: 10px 0; text-align: center; border-radius: 8px; background: #3a3a3a; border: 2px solid transparent; font-size: 20px; font-weight: 800; }
+        .step.up { color: #4FC3F7; }
+        .step.down { color: #FFB74D; }
+        .step.current { border-color: #39FF14; box-shadow: 0 0 12px rgba(57,255,20,0.5); background: #1f3a1f; }
+        #log { margin: 24px auto 0; max-width: 760px; padding: 16px; background: #000; height: 200px; overflow-y: auto; text-align: left; font-family: monospace; border-radius: 8px; line-height: 1.5; font-size: 13px; }
+        .success { color: #4CAF50; }
+        .error { color: #F44336; }
+        .info { color: #2196F3; }
+        .small { font-size: 13px; color: #aaa; }
+        textarea { width: 100%; box-sizing: border-box; background: #333; color: #fff; border: 1px solid #555; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; line-height: 1.5; resize: vertical; }
+        /* 노래방 스타일 악보 뷰 */
+        #songView { max-width: 760px; margin: 16px auto; padding: 24px 18px; background: #181818; border-radius: 12px; height: 360px; overflow-y: auto; text-align: left; scroll-behavior: smooth; }
+        #songView .line { margin: 0 0 22px; line-height: 2.6; white-space: normal; }
+        #songView .line:empty { height: 10px; margin: 0; }
+        .word { display: inline-flex; align-items: flex-end; white-space: nowrap; vertical-align: bottom; }
+        .syl { display: inline-flex; flex-direction: column; align-items: center; vertical-align: bottom; }
+        .syl .chordlabel { font-size: 14px; font-weight: 800; color: #9ad; height: 18px; line-height: 18px; }
+        .syl .ch { font-size: 30px; font-weight: 700; color: #ddd; padding: 0 1px; border-radius: 6px; transition: 0.15s; }
+        .syl.done .ch { color: #6a6a6a; }
+        .syl.current .ch { color: #fff; background: #2e7d32; box-shadow: 0 0 14px rgba(57,255,20,0.6); }
+        .syl.current .chordlabel { color: #39FF14; }
+        .syl .ch.gap { display: inline-block; width: 14px; }
+        #cursorInfo { max-width: 760px; margin: 8px auto 0; font-size: 16px; color: #ccc; text-align: center; }
+        #cursorInfo b { font-size: 20px; }
+        .arrow-up { color: #4FC3F7; }
+        .arrow-down { color: #FFB74D; }
+    </style>
+</head>
+<body>
+    <h2>🎸 악보 팔로우 스트럼 브릿지 🎸</h2>
+    <p class="small">아래 큰 악보를 보며 연주하세요. 왼손으로 코드를 잡고 오른손으로 스트럼하면, 가사 위 코드/방향이 맞을 때마다 초록 커서가 한 글자씩 진행합니다.</p>
+
+    <button id="btnSerial" class="btn">1. 오른손(ESP32) 연결</button>
+    <button id="btnMidi" class="btn">2. IAC 드라이버 연결</button>
+
+    <div class="panel">
+        <h3>왼손 코드 컨트롤러 (WebSocket)</h3>
+        <div style="margin: 6px 0;">
+            <label for="wsUrlInput">URL:</label>
+            <input type="text" id="wsUrlInput" value="ws://localhost:8082" style="width: 230px;" />
+            <button id="btnReconnectWs" style="background: #555; color: #fff; padding: 8px 12px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer;">연결</button>
+        </div>
+        <div id="wsStatus" style="margin-top: 8px; font-weight: bold; color: #FF9800;">연결 중...</div>
+        <div style="margin-top: 10px;">현재 코드: <span id="currentChord">-</span></div>
+    </div>
+
+    <div class="panel">
+        <h3>노래 (가사 + 코드)</h3>
+        <div style="margin: 6px 0;">
+            <textarea id="songInput" rows="8"></textarea>
+        </div>
+        <div style="margin: 6px 0;">
+            <button id="btnApplySong" style="background: #00979D; color: #fff; padding: 8px 12px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer;">악보 적용</button>
+            <button id="btnResetScore" style="background: #555; color: #fff; padding: 8px 12px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer;">처음으로</button>
+            <label style="margin-left: 10px;"><input type="checkbox" id="loopChk" checked /> 반복</label>
+            <label style="margin-left: 10px;"><input type="checkbox" id="requireChordChk" checked /> 코드 일치 요구</label>
+        </div>
+        <p class="small">형식(ChordPro): <code>[G]너의 그 [D7]한마디 말[C]도</code> — 대괄호 안에 코드, 뒤에 가사. <b>한 음절(글자)마다 스트럼 1회</b>로 한 칸씩 진행합니다. 빈 줄은 간격이 됩니다.</p>
+        <p class="small"><b>소리</b>는 항상 왼손이 잡은 실시간 코드로 납니다. <b>진행</b>은 (코드 일치 요구 체크 시) 왼손 코드가 악보의 코드와 같고, 방향도 맞을 때만 됩니다 — 틀린 코드로 치면 소리는 나도 칸은 안 넘어갑니다.</p>
+    </div>
+
+    <div id="songView"></div>
+    <div id="cursorInfo">다음: <b id="nextChord">-</b> <b id="nextDir" class="arrow-down">▼</b> &nbsp;|&nbsp; <span id="cursorChar" style="color:#39FF14; font-weight:800;">-</span></div>
+
+    <div class="panel">
+        <h3>스트럼 방향 패턴 (음절마다 순환)</h3>
+        <div style="margin: 6px 0;">
+            <input type="text" id="scoreInput" value="D U" style="width: 320px;" />
+            <button id="btnApplyScore" style="background: #00979D; color: #fff; padding: 8px 12px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer;">적용</button>
+            <label style="margin-left: 10px;"><input type="checkbox" id="strictDirChk" checked /> 실제 방향 일치 요구</label>
+        </div>
+        <p class="small">표기: <b>D</b>=다운(저음→고음), <b>U</b>=업(고음→저음). 이 패턴이 가사 음절마다 순환하며 <b>각 음절에서 기대하는 스트럼 방향</b>을 정합니다. 예) <code>D U</code> = 다운·업 번갈아.</p>
+        <p class="small">체크 시: 센서가 감지한 실제 방향이 기대 방향과 <b>다르면 "가짜"로 보고 건너뜁니다</b>(소리·진행 없음). 해제 시: 방향 무시.</p>
+        <div id="scoreDisplay"></div>
+    </div>
+
+    <div class="panel">
+        <h3>음색 (잔향 / 리버브)</h3>
+        <div style="margin: 8px 0;">
+            <label>잔향(음 길이): <b><span id="sustainVal">1600</span> ms</b></label><br>
+            <input type="range" id="sustainSlider" min="300" max="4000" step="100" value="1600" style="width: 100%;" />
+        </div>
+        <div style="margin: 8px 0;">
+            <label>리버브(CC91): <b><span id="reverbVal">100</span></b></label><br>
+            <input type="range" id="reverbSlider" min="0" max="127" step="1" value="100" style="width: 100%;" />
+        </div>
+        <p class="small">음이 즉시 끊기지 않고 다음 스트럼과 <b>겹쳐 울리다 서서히 사라집니다</b>. 잔향을 늘리면 더 오래 유지되고, 리버브는 신스(악기) 자체의 공간감입니다. ※ 리버브는 IAC 뒤 악기가 CC91을 지원해야 적용됩니다.</p>
+    </div>
+
+    <div id="log"><span class="info">시스템 대기 중... 1) 오른손 연결 2) IAC 연결 순서로 눌러주세요.</span><br></div>
+
+    <script>
+        // ---------------------------------------------------------------------
+        //  코드 음표 테이블 (펌웨어 chords[6][6] 이식)
+        //  C=0, D7=1, Em=2, G=3, A=4, F=5
+        // ---------------------------------------------------------------------
+        const CHORD_NOTES = [
+            [48, 52, 55, 60, 64, 67], // C
+            [50, 54, 57, 60, 62, 66], // D7
+            [40, 47, 52, 55, 59, 64], // Em
+            [43, 47, 50, 55, 59, 67], // G
+            [57, 61, 64, 69, 73, 76], // A
+            [53, 57, 60, 65, 69, 72], // F
+        ];
+        const CHORD_NAMES = ['C', 'D7', 'Em', 'G', 'A', 'F'];
+        const chordMap = { 'C': 0, 'D7': 1, 'EM': 2, 'G': 3, 'A': 4, 'F': 5 };
+
+        // 한 음이 울리는(노트온~노트오프) 시간. 길수록 줄이 오래 울린다. 슬라이더로 조절.
+        let SUSTAIN_MS = 1600;
+        // 리버브(MIDI CC91) 전송량 0~127. 신스(IAC 뒤 악기)가 공간 잔향을 입힌다.
+        let reverbAmount = 100;
+
+        let currentChordIndex = 2; // 기본 Em (펌웨어 기본과 동일)
+        let score = ['D', 'U']; // 스트럼 방향 패턴 (음절마다 순환)
+        let scoreIndex = 0;      // 노래 미입력 시(단순 모드)에만 사용
+        let strictDir = true;    // 센서 실제 방향이 기대 방향과 일치해야 진행 → 가짜 동작 걸러냄
+        let requireChord = true; // 왼손 코드가 악보 코드와 일치해야 진행
+        let loopScore = true;
+
+        // 노래(가사+코드) 상태. songSteps[i] = { char, chordName, chordIdx }
+        let songSteps = [];
+        let songIndex = 0;
+
+        // 데모 곡: "너의 의미" (김창완 / Ponytail). ChordPro 형식.
+        const DEFAULT_SONG = [
+            "[G]너의 그 [D7]한마디 말[C]도 그 웃음도 [Em]나에겐 [G]커다란 [D7]의미",
+            "[G]너의 그 [D7]작은 눈빛[C]도 쓸쓸한 뒷모습도 [Em]나에겐 [G]힘겨운 [D7]약속",
+            "[C]너의 모든것 내게로 [D7]와 [C]풀리지 않는 수수께끼가 [D7]되네",
+            "[Em]슬픔은 간이역의 [C]코스모스로 피고 [G]스쳐 불어온 넌 [D7]향긋한 바람",
+            "[Em]나 이제 뭉게구름 위에 [C]성을 짓고 [G]널 향해 창을 내리 [D7]바람 드는 창을",
+            "[G]너의 그 [D7]한마디 말[C]도 그 웃음도 [Em]나에겐 [G]커다란 [D7]의미",
+            "[G]너의 그 [D7]작은 눈빛[C]도 쓸쓸한 뒷모습도 [Em]나에겐 [G]힘겨운 [D7]약속"
+        ].join('\n');
+
+        let midiOutput = null;
+        let serialPort = null;
+
+        const btnSerial = document.getElementById('btnSerial');
+        const btnMidi = document.getElementById('btnMidi');
+        const logDiv = document.getElementById('log');
+        const wsStatus = document.getElementById('wsStatus');
+        const currentChordEl = document.getElementById('currentChord');
+        const scoreInput = document.getElementById('scoreInput');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const loopChk = document.getElementById('loopChk');
+
+        function log(msg, type = 'info') {
+            logDiv.innerHTML += `<span class="${type}">[${new Date().toLocaleTimeString()}] ${msg}</span><br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // ---------------------------------------------------------------------
+        //  MIDI 송신 헬퍼
+        // ---------------------------------------------------------------------
+        function noteOn(note, vel) { if (midiOutput) midiOutput.send([0x90, note, vel]); }
+        function noteOff(note) { if (midiOutput) midiOutput.send([0x80, note, 0]); }
+        function sendCC(cc, val) { if (midiOutput) midiOutput.send([0xB0, cc, val & 0x7f]); }
+
+        // 음마다 개별 노트오프 타이머를 들고 있어, 이전 코드가 즉시 끊기지 않고
+        // 다음 스트럼과 겹쳐 울리다가(ring-out) 각자 수명이 다하면 사라진다.
+        const noteTimers = new Map(); // note(번호) -> 예약된 noteOff 타이머 id
+
+        function ringNote(note, vel, delayMs, sustainMs) {
+            setTimeout(() => {
+                if (!midiOutput) return;
+                // 같은 음이 아직 울리는 중이면 먼저 끄고 새로 친다(겹침 시 깔끔한 재타격)
+                if (noteTimers.has(note)) { clearTimeout(noteTimers.get(note)); noteOff(note); }
+                noteOn(note, vel);
+                const off = setTimeout(() => { noteOff(note); noteTimers.delete(note); }, sustainMs);
+                noteTimers.set(note, off);
+            }, delayMs);
+        }
+
+        // 전체 정지(리셋/긴급용). 평상시 스트럼에서는 호출하지 않아 잔향을 살린다.
+        function allNotesOff() {
+            noteTimers.forEach((t) => clearTimeout(t));
+            noteTimers.forEach((t, note) => noteOff(note));
+            noteTimers.clear();
+        }
+
+        // 리버브 전송. MIDI 연결 시 + 슬라이더 변경 시 호출.
+        function applyReverb() { sendCC(91, reverbAmount); }
+
+        // ---------------------------------------------------------------------
+        //  추가 DOM 참조
+        // ---------------------------------------------------------------------
+        const songInput = document.getElementById('songInput');
+        const songView = document.getElementById('songView');
+        const nextChordEl = document.getElementById('nextChord');
+        const nextDirEl = document.getElementById('nextDir');
+        const cursorCharEl = document.getElementById('cursorChar');
+
+        function dirKor(d) { return d === 'U' ? '업' : '다운'; }
+
+        // ---------------------------------------------------------------------
+        //  스트럼 방향 패턴 (음절마다 순환)
+        // ---------------------------------------------------------------------
+        function parseScore(text) {
+            const out = [];
+            for (const ch of text.toUpperCase()) {
+                if (ch === 'U') out.push('U');
+                else if (ch === 'D') out.push('D');
+            }
+            return out;
+        }
+
+        // 현재 커서가 가리키는 패턴 인덱스 (노래 모드: 음절 인덱스 순환, 단순 모드: scoreIndex)
+        function curPatternIndex() {
+            if (!score.length) return 0;
+            return songSteps.length ? (songIndex % score.length) : (scoreIndex % score.length);
+        }
+
+        function renderScore() {
+            scoreDisplay.innerHTML = '';
+            if (score.length === 0) {
+                scoreDisplay.innerHTML = '<span class="small">(방향 패턴 없음 — 매 스트럼 다운)</span>';
+                return;
+            }
+            const cur = curPatternIndex();
+            score.forEach((dir, i) => {
+                const el = document.createElement('div');
+                el.className = `step ${dir === 'U' ? 'up' : 'down'}${i === cur ? ' current' : ''}`;
+                el.textContent = dir;
+                scoreDisplay.appendChild(el);
+            });
+        }
+
+        function applyScore() {
+            score = parseScore(scoreInput.value);
+            renderScore();
+            renderSongHighlight();
+            log(`스트럼 패턴 적용: ${score.length ? score.join(' ') : '(없음)'}`, 'success');
+        }
+
+        function advanceScore() { // 단순 모드 전용
+            if (score.length === 0) return;
+            scoreIndex++;
+            if (scoreIndex >= score.length) scoreIndex = loopScore ? 0 : score.length - 1;
+        }
+
+        // ---------------------------------------------------------------------
+        //  노래(가사+코드) 파싱 / 카라오케 뷰
+        //  ChordPro 형식: "[G]너의 그 [D7]한마디" — 대괄호 코드 + 가사.
+        //  비공백 글자 1개 = 스텝 1개. 코드는 직전 [..] 마커가 그 뒤 음절에 적용.
+        // ---------------------------------------------------------------------
+        function parseSong(text) {
+            const lineEls = [];
+            const steps = [];
+            let curChordName = null, curChordIdx = null;
+            for (const raw of text.split('\n')) {
+                const lineEl = document.createElement('div');
+                lineEl.className = 'line';
+                let pendingChord = null; // 다음 음절 위에 표시할 코드
+                let wordEl = null;       // 현재 단어(공백 사이 음절 묶음) — 줄바꿈은 단어 단위로
+                const flushWord = () => {
+                    if (wordEl && wordEl.childNodes.length) { lineEl.appendChild(wordEl); }
+                    wordEl = null;
+                };
+                let i = 0;
+                while (i < raw.length) {
+                    const c = raw[i];
+                    if (c === '[') {
+                        const close = raw.indexOf(']', i);
+                        if (close > i) {
+                            const name = raw.slice(i + 1, close).trim();
+                            curChordName = name;
+                            const idx = chordMap[name.toUpperCase()];
+                            curChordIdx = (idx === undefined) ? null : idx;
+                            pendingChord = name;
+                            i = close + 1;
+                            continue;
+                        }
+                    }
+                    if (c === ' ') {
+                        flushWord();
+                        const sp = document.createElement('span');
+                        sp.className = 'spacer';
+                        sp.style.display = 'inline-block';
+                        sp.style.width = '16px';
+                        lineEl.appendChild(sp);
+                        i++;
+                        continue;
+                    }
+                    // 음절 = 스텝
+                    if (!wordEl) { wordEl = document.createElement('span'); wordEl.className = 'word'; }
+                    const syl = document.createElement('span');
+                    syl.className = 'syl';
+                    syl.dataset.step = steps.length;
+                    const cl = document.createElement('span');
+                    cl.className = 'chordlabel';
+                    if (pendingChord) { cl.textContent = pendingChord; pendingChord = null; }
+                    else { cl.innerHTML = '&nbsp;'; }
+                    const ch = document.createElement('span');
+                    ch.className = 'ch';
+                    ch.textContent = c;
+                    syl.appendChild(cl);
+                    syl.appendChild(ch);
+                    wordEl.appendChild(syl);
+                    steps.push({ char: c, chordName: curChordName, chordIdx: curChordIdx });
+                    i++;
+                }
+                flushWord();
+                lineEls.push(lineEl);
+            }
+            return { steps, lineEls };
+        }
+
+        function applySong() {
+            const parsed = parseSong(songInput.value);
+            songSteps = parsed.steps;
+            songIndex = 0;
+            songView.innerHTML = '';
+            parsed.lineEls.forEach((el) => songView.appendChild(el));
+            renderSongHighlight();
+            renderScore();
+            log(`악보 적용: ${songSteps.length}글자`, 'success');
+        }
+
+        function renderSongHighlight() {
+            songView.querySelectorAll('.syl').forEach((el) => {
+                const s = parseInt(el.dataset.step, 10);
+                el.classList.toggle('current', s === songIndex);
+                el.classList.toggle('done', s < songIndex);
+            });
+            const cur = songView.querySelector('.syl.current');
+            if (cur) cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            updateCursorInfo();
+        }
+
+        function updateCursorInfo() {
+            const step = songSteps[songIndex];
+            const dir = score.length ? score[curPatternIndex()] : 'D';
+            nextChordEl.textContent = step ? (step.chordName || '-') : '-';
+            nextDirEl.textContent = dir === 'U' ? '▲' : '▼';
+            nextDirEl.className = dir === 'U' ? 'arrow-up' : 'arrow-down';
+            cursorCharEl.textContent = step ? step.char : '끝';
+        }
+
+        function resetScore() {
+            songIndex = 0;
+            scoreIndex = 0;
+            renderSongHighlight();
+            renderScore();
+            log('악보 처음으로 되돌림', 'info');
+        }
+
+        // ---------------------------------------------------------------------
+        //  공통: 현재 왼손 코드를 dir 방향으로 아르페지오. 직전 음은 끊지 않음(ring-out).
+        // ---------------------------------------------------------------------
+        function playChordSound(chordIdx, dir, vel) {
+            const chord = CHORD_NOTES[chordIdx];
+            if (!chord) return;
+            const order = dir === 'U' ? [5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5];
+            const stagger = Math.max(2, Math.round(18 - (vel - 70) * (15 / 57)));
+            order.forEach((idx, k) => ringNote(chord[idx], vel, k * stagger, SUSTAIN_MS));
+        }
+
+        // ---------------------------------------------------------------------
+        //  스트럼 1회 처리
+        //  소리: 항상 왼손 실시간 코드. 진행: (코드 일치 요구 시) 악보 코드 + 방향 일치할 때만.
+        //  strumDir : ESP32가 감지한 실제 스트럼 방향 'U'|'D' (없으면 null)
+        // ---------------------------------------------------------------------
+        function playScoreStep(vel, strumDir) {
+            if (!midiOutput) log('IAC 미연결: 소리가 나지 않습니다.', 'error');
+
+            // ===== 노래 모드 (가사 입력됨) =====
+            if (songSteps.length) {
+                const step = songSteps[songIndex];
+                const expectedDir = score.length ? score[curPatternIndex()] : null;
+
+                // (1) 방향 게이트: 기대 방향과 다르면 가짜 스트로크 -> 무시(소리·진행 없음)
+                if (strictDir && expectedDir && strumDir && strumDir !== expectedDir) {
+                    log(`· ${dirKor(strumDir)} 무시 (기대: ${dirKor(expectedDir)})`, 'info');
+                    return;
+                }
+                // (2) 소리는 항상 왼손 코드로. 스윙 방향은 실제 -> 기대 -> 다운 순.
+                const playDir = strumDir || expectedDir || 'D';
+                playChordSound(currentChordIndex, playDir, vel);
+
+                // (3) 코드 게이트: 왼손 코드가 악보 코드와 다르면 소리만 나고 진행은 막음
+                if (requireChord && step && step.chordIdx != null && currentChordIndex !== step.chordIdx) {
+                    log(`▷ ${CHORD_NAMES[currentChordIndex]}로 침 — 진행 안 함 (악보 코드: ${step.chordName})`, 'error');
+                    return;
+                }
+                // (4) 진행
+                log(`▶ '${step.char}'  ${step.chordName || CHORD_NAMES[currentChordIndex]} ${dirKor(playDir)} (vel=${vel})`, 'success');
+                songIndex++;
+                if (songIndex >= songSteps.length) {
+                    if (loopScore) { songIndex = 0; }
+                    else { songIndex = songSteps.length - 1; log('🎵 악보 끝!', 'info'); }
+                }
+                renderSongHighlight();
+                renderScore();
+                return;
+            }
+
+            // ===== 단순 U/D 모드 (가사 미입력) =====
+            if (strictDir && score.length && strumDir) {
+                const expected = score[scoreIndex];
+                if (strumDir !== expected) {
+                    log(`· ${dirKor(strumDir)} 무시 (기대: ${dirKor(expected)})`, 'info');
+                    return;
+                }
+            }
+            const dir = score.length ? score[scoreIndex] : (strumDir || 'D');
+            playChordSound(currentChordIndex, dir, vel);
+            log(`▶ ${CHORD_NAMES[currentChordIndex]} ${dirKor(dir)} (vel=${vel})`, 'success');
+            advanceScore();
+            renderScore();
+        }
+
+        // ---------------------------------------------------------------------
+        //  컨트롤 연결
+        // ---------------------------------------------------------------------
+        document.getElementById('btnApplySong').addEventListener('click', applySong);
+        document.getElementById('btnApplyScore').addEventListener('click', applyScore);
+        document.getElementById('btnResetScore').addEventListener('click', resetScore);
+        loopChk.addEventListener('change', () => { loopScore = loopChk.checked; });
+        const strictDirChk = document.getElementById('strictDirChk');
+        strictDirChk.addEventListener('change', () => { strictDir = strictDirChk.checked; });
+        const requireChordChk = document.getElementById('requireChordChk');
+        requireChordChk.addEventListener('change', () => { requireChord = requireChordChk.checked; });
+
+        const sustainSlider = document.getElementById('sustainSlider');
+        const sustainVal = document.getElementById('sustainVal');
+        sustainSlider.addEventListener('input', () => {
+            SUSTAIN_MS = parseInt(sustainSlider.value, 10);
+            sustainVal.textContent = SUSTAIN_MS;
+        });
+        const reverbSlider = document.getElementById('reverbSlider');
+        const reverbVal = document.getElementById('reverbVal');
+        reverbSlider.addEventListener('input', () => {
+            reverbAmount = parseInt(reverbSlider.value, 10);
+            reverbVal.textContent = reverbAmount;
+            applyReverb();
+        });
+
+        // 데모 곡 로드
+        songInput.value = DEFAULT_SONG;
+        applySong();
+
+        // ---------------------------------------------------------------------
+        //  WebSocket: 왼손 코드 컨트롤러 -> 현재 코드 갱신
+        // ---------------------------------------------------------------------
+        let ws = null;
+
+        function connectWebSocket(url) {
+            if (ws) ws.close();
+            log(`코드 컨트롤러 연결 시도... (${url})`, 'info');
+            wsStatus.innerText = '연결 중...';
+            wsStatus.style.color = '#FF9800';
+
+            ws = new WebSocket(url);
+
+            ws.addEventListener('open', () => {
+                log('코드 컨트롤러 연결 성공!', 'success');
+                wsStatus.innerText = '연결됨 🟢';
+                wsStatus.style.color = '#4CAF50';
+            });
+
+            ws.addEventListener('message', (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (!data.chord) return;
+                    const idx = chordMap[data.chord.toUpperCase()];
+                    if (idx === undefined) return;
+                    // press(또는 action 없음) 시 현재 코드 갱신. release는 마지막 코드 유지.
+                    if (!data.action || data.action === 'press') {
+                        currentChordIndex = idx;
+                        currentChordEl.textContent = data.chord;
+                        log(`코드 선택: ${data.chord}`, 'info');
+                    }
+                } catch (err) { /* 무시 */ }
+            });
+
+            ws.addEventListener('close', () => {
+                wsStatus.innerText = '연결 끊김 🔴';
+                wsStatus.style.color = '#F44336';
+            });
+            ws.addEventListener('error', () => log('WebSocket 에러', 'error'));
+        }
+
+        const wsUrlInput = document.getElementById('wsUrlInput');
+        const urlParams = new URLSearchParams(window.location.search);
+        const paramPort = urlParams.get('port');
+        if (paramPort) wsUrlInput.value = `ws://localhost:${paramPort}`;
+        connectWebSocket(wsUrlInput.value);
+        document.getElementById('btnReconnectWs').addEventListener('click', () => connectWebSocket(wsUrlInput.value));
+
+        // ---------------------------------------------------------------------
+        //  MIDI(IAC) 연결
+        // ---------------------------------------------------------------------
+        btnMidi.addEventListener('click', async () => {
+            try {
+                const midiAccess = await navigator.requestMIDIAccess();
+                const outputs = Array.from(midiAccess.outputs.values());
+                midiOutput = outputs.find((o) => o.name.includes('IAC'));
+                if (midiOutput) {
+                    log(`MIDI 연결 성공: ${midiOutput.name}`, 'success');
+                    btnMidi.style.background = '#4CAF50';
+                    btnMidi.innerText = 'IAC 드라이버 연결됨';
+                    applyReverb(); // 연결 직후 리버브량 전송
+                } else {
+                    log("IAC 드라이버를 찾을 수 없습니다. '오디오 MIDI 설정'을 확인하세요.", 'error');
+                }
+            } catch (err) {
+                log('MIDI 접근 권한 거부 또는 미지원 브라우저.', 'error');
+            }
+        });
+
+        // ---------------------------------------------------------------------
+        //  오른손(ESP32) 시리얼 연결 + STRUM 텍스트 파싱
+        // ---------------------------------------------------------------------
+        btnSerial.addEventListener('click', async () => {
+            try {
+                serialPort = await navigator.serial.requestPort();
+                await serialPort.open({ baudRate: 115200 });
+                log('오른손(ESP32) 연결 성공! (115200)', 'success');
+                btnSerial.style.background = '#4CAF50';
+                btnSerial.innerText = '오른손 연결됨';
+                readSerial();
+            } catch (err) {
+                log(`오른손 연결 실패: ${err.message}`, 'error');
+            }
+        });
+
+        async function readSerial() {
+            const reader = serialPort.readable.getReader();
+            const decoder = new TextDecoder();
+            let lineBuf = '';
+            try {
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    lineBuf += decoder.decode(value, { stream: true });
+                    let nl;
+                    while ((nl = lineBuf.indexOf('\n')) >= 0) {
+                        const line = lineBuf.slice(0, nl).trim();
+                        lineBuf = lineBuf.slice(nl + 1);
+                        if (line.startsWith('STRUM')) {
+                            // 형식: "STRUM:<D|U>:<vel>" 또는 구버전 "STRUM:<vel>"
+                            let vel = 100;
+                            let dir = null;
+                            const parts = line.split(':');
+                            for (let i = 1; i < parts.length; i++) {
+                                const p = parts[i].trim().toUpperCase();
+                                if (p === 'U' || p === 'D') dir = p;
+                                else {
+                                    const v = parseInt(p, 10);
+                                    if (!isNaN(v)) vel = Math.max(1, Math.min(127, v));
+                                }
+                            }
+                            playScoreStep(vel, dir);
+                        }
+                    }
+                    if (lineBuf.length > 256) lineBuf = ''; // 안전장치
+                }
+            } catch (error) {
+                log(`시리얼 읽기 에러: ${error}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

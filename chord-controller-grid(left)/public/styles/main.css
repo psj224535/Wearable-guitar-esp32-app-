@@ -1,0 +1,60 @@
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
+  background: #0a0a0f;
+}
+
+body {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.chord-btn {
+  transition: transform 80ms ease, box-shadow 80ms ease, background-color 80ms ease, border-color 80ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chord-btn.active {
+  transform: scale(0.97);
+  background: linear-gradient(145deg, rgba(57, 255, 20, 0.22), rgba(0, 212, 255, 0.14));
+  border-color: #39ff14;
+  box-shadow: 0 0 24px rgba(57, 255, 20, 0.6), inset 0 0 28px rgba(57, 255, 20, 0.18);
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.status-dot.connected { color: #39ff14; background: #39ff14; }
+.status-dot.connecting { color: #fbbf24; background: #fbbf24; animation: pulse 1s infinite; }
+.status-dot.disconnected { color: #ef4444; background: #ef4444; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.chord-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  height: 100%;
+  width: 100%;
+}
+
+@media (orientation: landscape) {
+  .chord-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+}

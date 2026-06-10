@@ -1,0 +1,12 @@
+{
+  "name": "chord-controller-grid",
+  "version": "1.0.0",
+  "description": "Grid-based chord controller for wearable guitar project",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.13.0"
+  }
+}

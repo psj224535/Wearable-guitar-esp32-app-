@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+  />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>Left-Hand Grid Chord Controller</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surface: '#0a0a0f',
+            panel: '#12121a',
+            neon: '#39ff14',
+            accent: '#00d4ff',
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="/styles/main.css" />
+</head>
+<body class="bg-surface text-white antialiased">
+  <div id="app" class="flex h-full w-full flex-col p-3 sm:p-4">
+    <header class="mb-3 flex shrink-0 items-center justify-between">
+      <div>
+        <p class="text-[10px] uppercase tracking-[0.25em] text-accent/80">Wearable Guitar (Easy Grid)</p>
+        <h1 class="text-sm font-semibold text-white/90">Grid Chord Controller</h1>
+      </div>
+      <div class="flex items-center gap-2 rounded-full border border-white/10 bg-panel/80 px-3 py-1.5 backdrop-blur">
+        <span id="statusDot" class="status-dot disconnected" aria-hidden="true"></span>
+        <span id="statusText" class="text-xs font-medium text-white/70">Offline</span>
+      </div>
+    </header>
+
+    <main class="min-h-0 flex-1">
+      <div id="chordGrid" class="chord-grid"></div>
+    </main>
+
+    <footer class="mt-2 shrink-0 text-center text-[10px] text-white/30">
+      화면 분할 6개 버튼 · 슬라이드 이동 감지 · 간편 연주 모드 (A, G, C, D, E, F)
+    </footer>
+  </div>
+
+  <script src="/scripts/app.js"></script>
+</body>
+</html>

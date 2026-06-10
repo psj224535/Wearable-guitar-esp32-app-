@@ -1,0 +1,3 @@
+[submodule "chord-controller(left)"]
+	path = chord-controller(left)
+	url = https://github.com/psj224535/chord-controller-left-.git

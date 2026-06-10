@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+
+# Env / secrets
+.env
+.env.local
+*.local
+
+# Arduino build artifacts
+build/
+*.hex
+*.bin
+*.elf
+
+# Editor / OS
+.vscode/
+*.swp
+*~
+Thumbs.db
