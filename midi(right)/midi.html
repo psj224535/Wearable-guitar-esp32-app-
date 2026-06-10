@@ -33,7 +33,11 @@
         .syl { display: inline-flex; flex-direction: column; align-items: center; vertical-align: bottom; }
         .syl .chordlabel { font-size: 14px; font-weight: 800; color: #9ad; height: 18px; line-height: 18px; }
         .syl .ch { font-size: 30px; font-weight: 700; color: #ddd; padding: 0 1px; border-radius: 6px; transition: 0.15s; }
+        .syl .dir { font-size: 13px; font-weight: 800; height: 16px; line-height: 16px; letter-spacing: 0.05em; }
+        .syl .dir.up { color: #4FC3F7; }
+        .syl .dir.down { color: #FFB74D; }
         .syl.done .ch { color: #6a6a6a; }
+        .syl.done .dir { opacity: 0.4; }
         .syl.current .ch { color: #fff; background: #2e7d32; box-shadow: 0 0 14px rgba(57,255,20,0.6); }
         .syl.current .chordlabel { color: #39FF14; }
         .syl .ch.gap { display: inline-block; width: 14px; }
@@ -41,14 +45,25 @@
         #cursorInfo b { font-size: 20px; }
         .arrow-up { color: #4FC3F7; }
         .arrow-down { color: #FFB74D; }
+        #modeTabs { max-width: 760px; margin: 18px auto 0; display: flex; gap: 8px; }
+        .tab { flex: 1; padding: 13px 10px; font-size: 15px; font-weight: 700; border: none; border-radius: 10px 10px 0 0; background: #2a2a2a; color: #888; cursor: pointer; transition: 0.2s; }
+        .tab:hover { color: #ccc; }
+        .tab.active { background: #00979D; color: #fff; }
     </style>
 </head>
 <body>
     <h2>🎸 악보 팔로우 스트럼 브릿지 🎸</h2>
-    <p class="small">아래 큰 악보를 보며 연주하세요. 왼손으로 코드를 잡고 오른손으로 스트럼하면, 가사 위 코드/방향이 맞을 때마다 초록 커서가 한 글자씩 진행합니다.</p>
+    <p class="small">왼손으로 코드를 잡고 오른손으로 스트럼하세요. 아래 두 모드 중 하나를 골라 연습합니다.</p>
 
     <button id="btnSerial" class="btn">1. 오른손(ESP32) 연결</button>
-    <button id="btnMidi" class="btn">2. IAC 드라이버 연결</button>
+    <button id="btnMidi" class="btn">2. 소리(MIDI) 연결</button>
+    <div style="margin: 6px 0;">
+        <label style="font-size: 14px;">출력 장치:
+            <select id="midiOutSelect" style="background:#333; color:#fff; border:1px solid #555; padding:6px 8px; border-radius:6px; font-size:14px; max-width:340px;">
+                <option value="">(MIDI 연결을 먼저 누르세요)</option>
+            </select>
+        </label>
+    </div>
 
     <div class="panel">
         <h3>왼손 코드 컨트롤러 (WebSocket)</h3>
@@ -61,33 +76,44 @@
         <div style="margin-top: 10px;">현재 코드: <span id="currentChord">-</span></div>
     </div>
 
-    <div class="panel">
-        <h3>노래 (가사 + 코드)</h3>
-        <div style="margin: 6px 0;">
-            <textarea id="songInput" rows="8"></textarea>
-        </div>
-        <div style="margin: 6px 0;">
-            <button id="btnApplySong" style="background: #00979D; color: #fff; padding: 8px 12px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer;">악보 적용</button>
-            <button id="btnResetScore" style="background: #555; color: #fff; padding: 8px 12px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer;">처음으로</button>
-            <label style="margin-left: 10px;"><input type="checkbox" id="loopChk" checked /> 반복</label>
-            <label style="margin-left: 10px;"><input type="checkbox" id="requireChordChk" checked /> 코드 일치 요구</label>
-        </div>
-        <p class="small">형식(ChordPro): <code>[G]너의 그 [D7]한마디 말[C]도</code> — 대괄호 안에 코드, 뒤에 가사. <b>한 음절(글자)마다 스트럼 1회</b>로 한 칸씩 진행합니다. 빈 줄은 간격이 됩니다.</p>
-        <p class="small"><b>소리</b>는 항상 왼손이 잡은 실시간 코드로 납니다. <b>진행</b>은 (코드 일치 요구 체크 시) 왼손 코드가 악보의 코드와 같고, 방향도 맞을 때만 됩니다 — 틀린 코드로 치면 소리는 나도 칸은 안 넘어갑니다.</p>
+    <!-- 모드 전환 탭 -->
+    <div id="modeTabs">
+        <button class="tab active" data-mode="basic">① 기초 — 스트럼 패턴</button>
+        <button class="tab" data-mode="advanced">② 심화 — 악보 따라가기</button>
     </div>
 
-    <div id="songView"></div>
-    <div id="cursorInfo">다음: <b id="nextChord">-</b> <b id="nextDir" class="arrow-down">▼</b> &nbsp;|&nbsp; <span id="cursorChar" style="color:#39FF14; font-weight:800;">-</span></div>
+    <!-- 심화 전용: 악보(가사+코드) + 카라오케 뷰 -->
+    <div id="advancedView">
+        <div class="panel" style="border-radius: 0 0 12px 12px; margin-top: 0;">
+            <h3>노래 (가사 + 코드)</h3>
+            <div style="margin: 6px 0;">
+                <textarea id="songInput" rows="8"></textarea>
+            </div>
+            <div style="margin: 6px 0;">
+                <button id="btnApplySong" style="background: #00979D; color: #fff; padding: 8px 12px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer;">악보 적용</button>
+                <label style="margin-left: 10px;"><input type="checkbox" id="requireChordChk" checked /> 코드 일치 요구</label>
+            </div>
+            <p class="small">형식(ChordPro): <code>[G]너의 그 [D7]한마디 말[C]도</code> — 대괄호 안에 코드, 뒤에 가사. <b>한 음절(글자)마다 스트럼 1회</b>로 한 칸씩 진행합니다. 빈 줄은 간격이 됩니다.</p>
+            <p class="small"><b>소리</b>는 항상 왼손이 잡은 실시간 코드로 납니다. <b>진행</b>은 (코드 일치 요구 체크 시) 왼손 코드가 악보의 코드와 같고, 방향도 맞을 때만 됩니다 — 틀린 코드로 치면 소리는 나도 칸은 안 넘어갑니다.</p>
+        </div>
 
-    <div class="panel">
-        <h3>스트럼 방향 패턴 (음절마다 순환)</h3>
+        <div id="songView"></div>
+        <div id="cursorInfo">다음: <b id="nextChord">-</b> <b id="nextDir" class="arrow-down">▼</b> &nbsp;|&nbsp; <span id="cursorChar" style="color:#39FF14; font-weight:800;">-</span></div>
+    </div>
+
+    <!-- 공통: 스트럼 방향 패턴 + U/D 표시 -->
+    <div class="panel" id="patternPanel">
+        <h3>스트럼 방향 패턴</h3>
         <div style="margin: 6px 0;">
-            <input type="text" id="scoreInput" value="D U" style="width: 320px;" />
+            <input type="text" id="scoreInput" value="D U" style="width: 280px;" />
             <button id="btnApplyScore" style="background: #00979D; color: #fff; padding: 8px 12px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer;">적용</button>
+            <button id="btnResetScore" style="background: #555; color: #fff; padding: 8px 12px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer;">처음으로</button>
+            <label style="margin-left: 10px;"><input type="checkbox" id="loopChk" checked /> 반복</label>
             <label style="margin-left: 10px;"><input type="checkbox" id="strictDirChk" checked /> 실제 방향 일치 요구</label>
         </div>
-        <p class="small">표기: <b>D</b>=다운(저음→고음), <b>U</b>=업(고음→저음). 이 패턴이 가사 음절마다 순환하며 <b>각 음절에서 기대하는 스트럼 방향</b>을 정합니다. 예) <code>D U</code> = 다운·업 번갈아.</p>
-        <p class="small">체크 시: 센서가 감지한 실제 방향이 기대 방향과 <b>다르면 "가짜"로 보고 건너뜁니다</b>(소리·진행 없음). 해제 시: 방향 무시.</p>
+        <p class="small">표기: <b>D</b>=다운(저음→고음), <b>U</b>=업(고음→저음). 예) <code>D U</code> = 다운·업 번갈아.</p>
+        <p class="small"><b>기초 모드</b>: 이 패턴 순서대로 스트럼할 때마다 왼손 코드가 한 칸씩 울립니다. <b>심화 모드</b>: 가사 음절마다 이 패턴이 순환하며 각 음절의 기대 방향을 정합니다.</p>
+        <p class="small">"실제 방향 일치 요구" 체크 시: 센서 실제 방향이 기대 방향과 <b>다르면 "가짜"로 보고 건너뜁니다</b>(소리·진행 없음). 해제 시: 방향 무시.</p>
         <div id="scoreDisplay"></div>
     </div>
 
@@ -101,10 +127,10 @@
             <label>리버브(CC91): <b><span id="reverbVal">100</span></b></label><br>
             <input type="range" id="reverbSlider" min="0" max="127" step="1" value="100" style="width: 100%;" />
         </div>
-        <p class="small">음이 즉시 끊기지 않고 다음 스트럼과 <b>겹쳐 울리다 서서히 사라집니다</b>. 잔향을 늘리면 더 오래 유지되고, 리버브는 신스(악기) 자체의 공간감입니다. ※ 리버브는 IAC 뒤 악기가 CC91을 지원해야 적용됩니다.</p>
+        <p class="small">음이 즉시 끊기지 않고 다음 스트럼과 <b>겹쳐 울리다 서서히 사라집니다</b>. 잔향을 늘리면 더 오래 유지되고, 리버브는 신스(악기) 자체의 공간감입니다. ※ 리버브는 선택한 출력 뒤의 악기가 CC91을 지원해야 적용됩니다.</p>
     </div>
 
-    <div id="log"><span class="info">시스템 대기 중... 1) 오른손 연결 2) IAC 연결 순서로 눌러주세요.</span><br></div>
+    <div id="log"><span class="info">시스템 대기 중... 1) 오른손 연결 2) 소리(MIDI) 연결 순서로 눌러주세요.</span><br></div>
 
     <script>
         // ---------------------------------------------------------------------
@@ -245,6 +271,7 @@
         function applyScore() {
             score = parseScore(scoreInput.value);
             renderScore();
+            updateDirLabels();
             renderSongHighlight();
             log(`스트럼 패턴 적용: ${score.length ? score.join(' ') : '(없음)'}`, 'success');
         }
@@ -310,8 +337,11 @@
                     const ch = document.createElement('span');
                     ch.className = 'ch';
                     ch.textContent = c;
+                    const dl = document.createElement('span');
+                    dl.className = 'dir'; // 기대 스트럼 방향(U/D) — updateDirLabels()가 채움
                     syl.appendChild(cl);
                     syl.appendChild(ch);
+                    syl.appendChild(dl);
                     wordEl.appendChild(syl);
                     steps.push({ char: c, chordName: curChordName, chordIdx: curChordIdx });
                     i++;
@@ -328,9 +358,22 @@
             songIndex = 0;
             songView.innerHTML = '';
             parsed.lineEls.forEach((el) => songView.appendChild(el));
+            updateDirLabels();
             renderSongHighlight();
             renderScore();
             log(`악보 적용: ${songSteps.length}글자`, 'success');
+        }
+
+        // 각 음절 아래에 기대 스트럼 방향(U/D) 표시. 스트럼 패턴이 음절마다 순환.
+        function updateDirLabels() {
+            songView.querySelectorAll('.syl').forEach((el) => {
+                const s = parseInt(el.dataset.step, 10);
+                const dl = el.querySelector('.dir');
+                if (!dl) return;
+                const dir = score.length ? score[s % score.length] : 'D';
+                dl.textContent = dir;
+                dl.className = `dir ${dir === 'U' ? 'up' : 'down'}`;
+            });
         }
 
         function renderSongHighlight() {
@@ -378,7 +421,7 @@
         //  strumDir : ESP32가 감지한 실제 스트럼 방향 'U'|'D' (없으면 null)
         // ---------------------------------------------------------------------
         function playScoreStep(vel, strumDir) {
-            if (!midiOutput) log('IAC 미연결: 소리가 나지 않습니다.', 'error');
+            if (!midiOutput) log('MIDI 미연결: 소리가 나지 않습니다.', 'error');
 
             // ===== 노래 모드 (가사 입력됨) =====
             if (songSteps.length) {
@@ -452,9 +495,33 @@
             applyReverb();
         });
 
-        // 데모 곡 로드
+        // ---------------------------------------------------------------------
+        //  모드 전환 (기초: 스트럼 패턴 / 심화: 악보 따라가기)
+        //  심화일 때만 songSteps를 채워 playScoreStep이 악보 분기를 타게 한다.
+        // ---------------------------------------------------------------------
+        const modeTabs = document.querySelectorAll('#modeTabs .tab');
+        const advancedView = document.getElementById('advancedView');
+        let mode = 'basic';
+
+        function setMode(m) {
+            mode = m;
+            modeTabs.forEach((t) => t.classList.toggle('active', t.dataset.mode === m));
+            advancedView.style.display = (m === 'advanced') ? '' : 'none';
+            if (m === 'advanced') {
+                applySong();          // songSteps 채움 -> 악보 모드
+            } else {
+                songSteps = [];       // 비움 -> 단순 패턴 모드 (왼손 코드 자유)
+                songIndex = 0;
+                scoreIndex = 0;
+                renderScore();
+                log('기초 모드: 패턴대로 스트럼하면 왼손 코드가 울립니다.', 'info');
+            }
+        }
+        modeTabs.forEach((t) => t.addEventListener('click', () => setMode(t.dataset.mode)));
+
+        // 데모 곡 미리 채워두고 기초 모드로 시작
         songInput.value = DEFAULT_SONG;
-        applySong();
+        setMode('basic');
 
         // ---------------------------------------------------------------------
         //  WebSocket: 왼손 코드 컨트롤러 -> 현재 코드 갱신
@@ -505,25 +572,59 @@
         document.getElementById('btnReconnectWs').addEventListener('click', () => connectWebSocket(wsUrlInput.value));
 
         // ---------------------------------------------------------------------
-        //  MIDI(IAC) 연결
+        //  MIDI 출력 연결 (크로스플랫폼)
+        //  - mac: IAC 드라이버 → GarageBand/Logic 등
+        //  - Windows: loopMIDI(가상 포트)→DAW, 또는 내장 "Microsoft GS Wavetable Synth"로 바로
+        //  드롭다운으로 어느 출력이든 선택 가능. 자동으로 가장 그럴듯한 걸 먼저 고른다.
         // ---------------------------------------------------------------------
+        const midiOutSelect = document.getElementById('midiOutSelect');
+        let midiAccess = null;
+
+        // 출력 우선순위: IAC(mac) > loopMIDI(win 가상포트) > GS Wavetable(win 내장) > 그 외
+        function rankOutput(name) {
+            const s = (name || '').toLowerCase();
+            if (s.includes('iac')) return 0;
+            if (s.includes('loopmidi')) return 1;
+            if (s.includes('wavetable') || s.includes('microsoft gs')) return 2;
+            return 3;
+        }
+
+        function selectOutputById(id) {
+            if (!midiAccess) return;
+            midiOutput = midiAccess.outputs.get(id) || null;
+            if (midiOutput) {
+                log(`소리 출력 선택: ${midiOutput.name}`, 'success');
+                applyReverb(); // 선택 직후 리버브량 전송
+            }
+        }
+
         btnMidi.addEventListener('click', async () => {
             try {
-                const midiAccess = await navigator.requestMIDIAccess();
+                midiAccess = await navigator.requestMIDIAccess();
                 const outputs = Array.from(midiAccess.outputs.values());
-                midiOutput = outputs.find((o) => o.name.includes('IAC'));
-                if (midiOutput) {
-                    log(`MIDI 연결 성공: ${midiOutput.name}`, 'success');
-                    btnMidi.style.background = '#4CAF50';
-                    btnMidi.innerText = 'IAC 드라이버 연결됨';
-                    applyReverb(); // 연결 직후 리버브량 전송
-                } else {
-                    log("IAC 드라이버를 찾을 수 없습니다. '오디오 MIDI 설정'을 확인하세요.", 'error');
+                if (outputs.length === 0) {
+                    log('MIDI 출력 장치가 없습니다. (Windows: loopMIDI 설치 또는 GS Wavetable 사용 / mac: 오디오 MIDI 설정에서 IAC 활성화)', 'error');
+                    return;
                 }
+                midiOutSelect.innerHTML = '';
+                outputs.forEach((o) => {
+                    const opt = document.createElement('option');
+                    opt.value = o.id;
+                    opt.textContent = o.name;
+                    midiOutSelect.appendChild(opt);
+                });
+                // 가장 그럴듯한 출력 자동 선택
+                const preferred = outputs.slice().sort((a, b) => rankOutput(a.name) - rankOutput(b.name))[0];
+                midiOutSelect.value = preferred.id;
+                selectOutputById(preferred.id);
+                btnMidi.style.background = '#4CAF50';
+                btnMidi.innerText = '소리(MIDI) 연결됨';
             } catch (err) {
-                log('MIDI 접근 권한 거부 또는 미지원 브라우저.', 'error');
+                log('MIDI 접근 권한 거부 또는 미지원 브라우저 (Chrome/Edge 권장).', 'error');
             }
         });
+
+        midiOutSelect.addEventListener('change', () => selectOutputById(midiOutSelect.value));
 
         // ---------------------------------------------------------------------
         //  오른손(ESP32) 시리얼 연결 + STRUM 텍스트 파싱

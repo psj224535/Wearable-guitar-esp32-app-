@@ -86,7 +86,7 @@ Wearable Guitar/
 3. Chrome 브라우저로 `midi(right)/midi.html` 파일을 엽니다.
 4. 웹페이지에서 다음을 설정합니다.
    * **`1. 오른손(ESP32) 연결`**: ESP32가 연결된 시리얼 포트(115200 Baud)를 선택해 연결합니다.
-   * **`2. IAC 드라이버 연결`**: 브라우저와 활성화한 IAC 드라이버를 연결합니다.
+   * **`2. 소리(MIDI) 연결`**: 누르면 사용 가능한 MIDI 출력이 **드롭다운**에 나열되고, 가장 적합한 출력(mac=IAC, Windows=loopMIDI/GS Wavetable)이 자동 선택됩니다. 필요하면 드롭다운에서 직접 바꿉니다.
    * **WebSocket URL**: 왼손 서버 포트와 맞춥니다(기본 `ws://localhost:8082`). `연결` 버튼을 누르면 왼손 코드가 "현재 코드"에 표시됩니다.
    * **악보**: 스트럼 패턴을 입력하고(예: `D U D U D U D U`) `적용`을 누릅니다. `반복` 체크 시 끝에서 처음으로 돌아가고, `처음으로`로 위치를 리셋합니다.
 
@@ -94,6 +94,34 @@ Wearable Guitar/
 1. **GarageBand**를 실행하고 소프트웨어 악기(예: Acoustic Guitar 등) 트랙을 생성합니다.
 2. 왼손으로 스마트폰 앱에서 원하는 코드를 짚고, 오른손 디바이스를 **위아래로 스트럼만 반복**합니다.
 3. 스트럼할 때마다 악보의 현재 스텝(`D`/`U`) 방향으로, 왼손이 잡은 코드가 한 칸씩 진행되며 연주됩니다. midi.html의 악보 표시에서 초록색으로 강조된 칸이 다음에 연주될 스텝입니다.
+
+---
+
+## 🪟 Windows에서 실행 (GarageBand 없이)
+
+`midi.html`은 크로스플랫폼입니다. GarageBand(=MIDI를 소리로 바꿔주는 신스)는 필수가 아니며, Windows에서는 아래 중 하나로 대체합니다. 펌웨어·서버 코드는 **수정 없이** 그대로 동작합니다.
+
+### 필수
+* **브라우저**: Chrome 또는 Edge (Web Serial / Web MIDI 필요 — Firefox/Safari 불가).
+* **Node.js**: 왼손 서버(`npm install` / `npm start`)는 Windows에서 동일하게 동작합니다.
+* **USB 시리얼 드라이버**: ESP32가 인식되지 않으면 보드 칩에 맞는 드라이버 설치 (CP210x 또는 CH340).
+* **로컬 IP 확인**: `ipconfig` (mac의 `ipconfig getifaddr en0` 대신).
+
+### 소리 출력 선택 (셋 중 하나)
+| 방법 | 난이도 | 설치 | 비고 |
+|---|---|---|---|
+| **내장 Microsoft GS Wavetable Synth** | 가장 쉬움 | 없음 | "소리(MIDI) 연결" 드롭다운에서 바로 선택. 약간의 지연·기본 음색 |
+| **VirtualMIDISynth + 사운드폰트** | 보통 | [VirtualMIDISynth](https://coolsoft.altervista.org/en/virtualmidisynth) + .sf2 | 더 좋은 음색 |
+| **loopMIDI + DAW**(Reaper/FL 등) | 높음 | [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) + DAW | 최고 음질·VST 사용 |
+
+### 순서
+1. (선택) 위 표의 가상 MIDI 포트/신스를 설치합니다. 가장 빠르게 하려면 설치 없이 **GS Wavetable**을 그대로 씁니다.
+2. 왼손 서버 실행: `cd chord-controller(left)` → `npm install` → `npm start`.
+3. Chrome/Edge로 `midi(right)/midi.html`을 엽니다.
+4. **`2. 소리(MIDI) 연결`** → 드롭다운에서 출력(GS Wavetable / loopMIDI 등)을 선택합니다.
+5. 나머지(시리얼 연결, WebSocket, 모드 선택)는 mac과 동일합니다.
+
+> ※ 리버브(MIDI CC91)는 선택한 출력 뒤의 신스가 지원할 때만 적용됩니다(GS Wavetable·다수 사운드폰트는 지원).
 
 ---
 

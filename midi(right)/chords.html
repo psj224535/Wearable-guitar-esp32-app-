@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>운지법 참고 - Wearable Guitar</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; margin: 0; padding: 28px 16px 48px; background: #1e1e1e; color: #fff; text-align: center; }
+        h1 { font-size: 22px; margin: 0 0 4px; }
+        p.sub { color: #aaa; font-size: 14px; margin: 0 0 24px; }
+        .grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; max-width: 880px; margin: 0 auto; }
+        .card { background: #2a2a2a; border-radius: 14px; padding: 14px 10px 18px; width: 170px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .card .nm { font-size: 26px; font-weight: 800; color: #39FF14; margin-bottom: 4px; }
+        .legend { max-width: 720px; margin: 28px auto 0; color: #bbb; font-size: 13px; line-height: 1.7; text-align: left; background: #242424; border-radius: 10px; padding: 14px 18px; }
+        .legend b { color: #fff; }
+        .dotnum { fill: #fff; font: 700 13px sans-serif; }
+        .open { fill: none; stroke: #4FC3F7; stroke-width: 2; }
+        .mute { stroke: #F44336; stroke-width: 2.4; }
+    </style>
+</head>
+<body>
+    <h1>🎸 운지법 참고 시트</h1>
+    <p class="sub">왼손 코드 운지 (개방 포지션). 막대 위 ○=개방현, ✕=치지 않는 현, 점 안 숫자=손가락(1검지·2중지·3약지·4새끼)</p>
+    <div class="grid" id="grid"></div>
+
+    <div class="legend">
+        <b>보는 법</b><br>
+        · 세로선 6개 = 줄(왼쪽부터 6번 줄=굵은 저음 E → 1번 줄=가는 고음 e)<br>
+        · 가로선 = 프렛. 맨 위 굵은 선 = 너트(0프렛).<br>
+        · 점 = 누르는 위치, 점 안 숫자 = 사용하는 손가락. 빨간 막대 = 한 손가락으로 여러 줄을 누르는 <b>바레</b>.<br>
+        · 줄 위 <span style="color:#4FC3F7;">○</span> = 누르지 않고 울리는 개방현, <span style="color:#F44336;">✕</span> = 소리내지 않는 줄.
+    </div>
+
+    <script>
+        // 줄 순서: index 0 = 6번줄(저음 E) ... index 5 = 1번줄(고음 e)
+        // fret: -1=뮤트(X), 0=개방(O), n=해당 프렛. finger: 0=없음, 1~4=손가락 번호
+        const CHORDS = [
+            { name: 'C',  frets: [-1, 3, 2, 0, 1, 0], fingers: [0, 3, 2, 0, 1, 0] },
+            { name: 'D7', frets: [-1, -1, 0, 2, 1, 2], fingers: [0, 0, 0, 2, 1, 3] },
+            { name: 'Em', frets: [0, 2, 2, 0, 0, 0], fingers: [0, 2, 3, 0, 0, 0] },
+            { name: 'G',  frets: [3, 2, 0, 0, 0, 3], fingers: [2, 1, 0, 0, 0, 3] },
+            { name: 'A',  frets: [-1, 0, 2, 2, 2, 0], fingers: [0, 0, 1, 2, 3, 0] },
+            { name: 'F',  frets: [1, 3, 3, 2, 1, 1], fingers: [1, 3, 4, 2, 1, 1], barre: { fret: 1, from: 0, to: 5 } },
+        ];
+
+        const NUM_FRETS = 4;       // 표시할 프렛 수
+        const COL = 24, ROW = 30;  // 줄 간격, 프렛 간격
+        const PADX = 22, PADY = 38;
+        const W = PADX * 2 + COL * 5;
+        const H = PADY + ROW * NUM_FRETS + 14;
+
+        function sx(i) { return PADX + i * COL; }            // 줄 x좌표
+        function fy(f) { return PADY + f * ROW; }            // 프렛선 y좌표 (f=0 너트)
+
+        function svgEl(tag, attrs) {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            for (const k in attrs) el.setAttribute(k, attrs[k]);
+            return el;
+        }
+
+        function drawChord(c) {
+            const svg = svgEl('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` });
+
+            // 프렛선
+            for (let f = 0; f <= NUM_FRETS; f++) {
+                svg.appendChild(svgEl('line', {
+                    x1: sx(0), y1: fy(f), x2: sx(5), y2: fy(f),
+                    stroke: '#ddd', 'stroke-width': f === 0 ? 5 : 1.5,
+                    'stroke-linecap': 'round'
+                }));
+            }
+            // 줄(세로선)
+            for (let i = 0; i < 6; i++) {
+                svg.appendChild(svgEl('line', {
+                    x1: sx(i), y1: fy(0), x2: sx(i), y2: fy(NUM_FRETS),
+                    stroke: '#ddd', 'stroke-width': 1.5
+                }));
+            }
+
+            // 너트 위 개방/뮤트 표시
+            for (let i = 0; i < 6; i++) {
+                const fr = c.frets[i];
+                const cx = sx(i), cy = PADY - 16;
+                if (fr === 0) {
+                    svg.appendChild(svgEl('circle', { cx, cy, r: 5.5, class: 'open' }));
+                } else if (fr === -1) {
+                    const d = 5;
+                    svg.appendChild(svgEl('line', { x1: cx - d, y1: cy - d, x2: cx + d, y2: cy + d, class: 'mute' }));
+                    svg.appendChild(svgEl('line', { x1: cx - d, y1: cy + d, x2: cx + d, y2: cy - d, class: 'mute' }));
+                }
+            }
+
+            // 바레(빨간 막대)
+            if (c.barre) {
+                const y = fy(c.barre.fret) - ROW / 2;
+                svg.appendChild(svgEl('rect', {
+                    x: sx(c.barre.from) - 8, y: y - 8, width: (c.barre.to - c.barre.from) * COL + 16, height: 16,
+                    rx: 8, fill: '#F44336', opacity: 0.85
+                }));
+            }
+
+            // 운지 점 + 손가락 번호
+            for (let i = 0; i < 6; i++) {
+                const fr = c.frets[i];
+                if (fr > 0) {
+                    const cx = sx(i), cy = fy(fr) - ROW / 2;
+                    svg.appendChild(svgEl('circle', { cx, cy, r: 9, fill: '#2e7d32', stroke: '#39FF14', 'stroke-width': 1.5 }));
+                    if (c.fingers[i]) {
+                        const t = svgEl('text', { x: cx, y: cy + 4.5, 'text-anchor': 'middle', class: 'dotnum' });
+                        t.textContent = c.fingers[i];
+                        svg.appendChild(t);
+                    }
+                }
+            }
+            return svg;
+        }
+
+        const grid = document.getElementById('grid');
+        CHORDS.forEach((c) => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            const nm = document.createElement('div');
+            nm.className = 'nm';
+            nm.textContent = c.name;
+            card.appendChild(nm);
+            card.appendChild(drawChord(c));
+            grid.appendChild(card);
+        });
+    </script>
+</body>
+</html>
